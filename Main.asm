@@ -25,7 +25,7 @@ START:
 READ_LOOP:
     MOV AH, 1
     INT 21H                    ; Get user input
-    MOV user_input[SI], AL      ; Store the actual input (not '*') in the array 
+    MOV user_input[SI], AL      ; Store the actual input in the array 
     
     MOV DL, 08H             ;One backspace
     MOV AH, 2
