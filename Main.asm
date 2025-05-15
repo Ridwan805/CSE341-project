@@ -53,9 +53,9 @@ MAIN PROC
     ; Initialize history log
     LEA DI, history_log
     MOV history_ptr, DI
-    LEA SI, msg_prompt+2  ; Skip CR,LF in message
+    LEA SI, msg_prompt+2  
     
-    ; Copy the initialization message to history log
+    
 INIT_HISTORY:
     MOV AL, [SI]
     CMP AL, '$'
