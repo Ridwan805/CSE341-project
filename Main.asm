@@ -70,7 +70,7 @@ START_PROGRAM:
 
 START:
     ; Log login attempt
-    LEA SI, msg_prompt+2  ; Skip CR,LF
+    LEA SI, msg_prompt+2  
     MOV DI, history_ptr
     
     ; Add newline if not at start
@@ -742,12 +742,7 @@ HINT_LOOP2:
     JE HINT_DONE2
     MOV password_hint[SI],AL
 
-    MOV DL,08h
-    MOV AH,2
-    INT 21h
-    MOV DL,'*'
-    MOV AH,2
-    INT 21h
+  
 
     INC SI
     CMP SI,20
