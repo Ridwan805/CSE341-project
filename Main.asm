@@ -53,9 +53,9 @@ MAIN PROC
     ; Initialize history log
     LEA DI, history_log
     MOV history_ptr, DI
-    LEA SI, msg_prompt+2  
+    LEA SI, msg_prompt+2  ; Skip CR,LF in message
     
-    
+    ; Copy the initialization message to history log
 INIT_HISTORY:
     MOV AL, [SI]
     CMP AL, '$'
@@ -70,7 +70,7 @@ START_PROGRAM:
 
 START:
     ; Log login attempt
-    LEA SI, msg_prompt+2  
+    LEA SI, msg_prompt+2  ; Skip CR,LF
     MOV DI, history_ptr
     
     ; Add newline if not at start
@@ -448,6 +448,10 @@ VIEW_HISTORY:
     INT 21h
     
     ; Wait for any key to continue
+
+Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
+Editing CSE341-project/Main.asm at main · Ridwan805/CSE341-project 
+New Feature!
     MOV AH,1
     INT 21h
     
@@ -742,7 +746,12 @@ HINT_LOOP2:
     JE HINT_DONE2
     MOV password_hint[SI],AL
 
-  
+    MOV DL,08h
+    MOV AH,2
+    INT 21h
+    MOV DL,'*'
+    MOV AH,2
+    INT 21h
 
     INC SI
     CMP SI,20
