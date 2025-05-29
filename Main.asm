@@ -15,7 +15,7 @@
     question_set       DB 1               ; flag (1=question is set by default)
     
     ; History Logging System
-    history_log        DB 100 DUP('$')    ; buffer for history (100 bytes)
+    history_log        DB 1000 DUP('$')    ; buffer for history (100 bytes)
     history_ptr        DW 0               ; pointer to current position in history
     
     ; Messages
@@ -41,6 +41,13 @@
     msg_answer_wrong    DB 13,10,'Wrong answer. Access denied.$'
     msg_answer_mismatch DB 13,10,'Answers did not match. Please try again.$'
     msg_menu           DB 13,10,'Options:',13,10,'1. Change PIN',13,10,'2. Set security question',13,10,'3. View history',13,10,'4. Exit',13,10,'Choice: $'
+    msg_menu_log_1 DB 13,10,'Menu: Change PIN',13,10,'$'
+    msg_menu_log_2 DB 13,10,'Menu: Set Security Question',13,10,'$'
+    msg_menu_log_3 DB 13,10,'Menu: View History',13,10,'$'
+    msg_menu_log_4 DB 13,10,'Menu: Exit',13,10,'$'
+    msg_pin_changed   DB 13,10,'PIN successfully changed to: $'
+    msg_hint_updated  DB 13,10,'Hint updated to: $'
+
     msg_history        DB 13,10,'--- Activity History ---$'
     newline            DB 13,10,'$'
 
@@ -51,51 +58,11 @@ MAIN PROC
     MOV ES,AX         ; for string operations
 
     ; Initialize history log
-    LEA DI, history_log
-    MOV history_ptr, DI
-    LEA SI, msg_prompt+2  ; Skip CR,LF in message
-    
-    ; Copy the initialization message to history log
-INIT_HISTORY:
-    MOV AL, [SI]
-    CMP AL, '$'
-    JE START_PROGRAM
-    MOV [DI], AL
-    INC SI
-    INC DI
-    JMP INIT_HISTORY
-
-START_PROGRAM:
+   MOV DI, OFFSET history_log
     MOV history_ptr, DI  ; Update history pointer
 
 START:
-    ; Log login attempt
-    LEA SI, msg_prompt+2  ; Skip CR,LF
-    MOV DI, history_ptr
     
-    ; Add newline if not at start
-    CMP DI, OFFSET history_log
-    JE LOG_MSG
-    MOV AL, 13
-    MOV [DI], AL
-    INC DI
-    MOV AL, 10
-    MOV [DI], AL
-    INC DI
-    
-LOG_MSG:
-    ; Copy message to history
-    MOV AL, [SI]
-LOG_COPY:
-    CMP AL, '$'
-    JE LOG_DONE
-    MOV [DI], AL
-    INC SI
-    INC DI
-    MOV AL, [SI]
-    JMP LOG_COPY
-LOG_DONE:
-    MOV history_ptr, DI
 
     ; Prompt for PIN
     MOV AH,9
@@ -171,24 +138,45 @@ SUCCESS_LOGGED:
 
     ; Show menu after successful login
 SHOW_MENU:
-    MOV AH,9
-    LEA DX,msg_menu
+    MOV AH, 9
+    LEA DX, msg_menu
     INT 21h
 
-    ; Get user choice
-    MOV AH,1
+    MOV AH, 1
     INT 21h
+    MOV BL, AL
 
-    ; Process menu choice
-    CMP AL,'1'
-    JE CHANGE_PIN
+        CMP AL,'1'
+    JE HANDLE_MENU_1
     CMP AL,'2'
-    JE SETUP_SECURITY_QUESTION
+    JE HANDLE_MENU_2
     CMP AL,'3'
-    JE VIEW_HISTORY
+    JE HANDLE_MENU_3
     CMP AL,'4'
-    JE EXIT
-    JMP SHOW_MENU     ; Invalid choice, show menu again
+    JE HANDLE_MENU_4
+    JMP SHOW_MENU ; fallback for invalid input
+
+HANDLE_MENU_1:
+    LEA SI, msg_menu_log_1
+    CALL APPEND_HISTORY
+    JMP CHANGE_PIN
+
+HANDLE_MENU_2:
+    LEA SI, msg_menu_log_2
+    CALL APPEND_HISTORY
+    JMP SETUP_SECURITY_QUESTION
+
+HANDLE_MENU_3:
+    LEA SI, msg_menu_log_3
+    CALL APPEND_HISTORY
+    JMP VIEW_HISTORY
+
+HANDLE_MENU_4:
+    LEA SI, msg_menu_log_4
+    CALL APPEND_HISTORY
+    JMP EXIT
+
+
 
 CHANGE_PIN:
     ; Reset flow
@@ -311,7 +299,6 @@ HINT_DONE:
     
     ; Copy message to history
     MOV AL, [SI]
-    JE EXIT
 LOG_HINT:
     CMP AL, '$'
     JE HINT_LOGGED
@@ -448,27 +435,35 @@ VIEW_HISTORY:
     INT 21h
     
     ; Wait for any key to continue
-
-Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
-Editing CSE341-project/Main.asm at main · Ridwan805/CSE341-project 
-New Feature!
     MOV AH,1
     INT 21h
     
     JMP SHOW_MENU
 
 FAIL:
-    ; Increment attempt count on wrong PIN
+    ; Increment attempt count
     INC attempts
     MOV AL, attempts
-    
-    ; Trigger alarm immediately if 3rd wrong attempt
+
+    ; If 3rd attempt ? alarm
     CMP AL, 3
     JE TRIGGER_ALARM
 
-    ; On 2nd attempt, clearly prompt forgot PIN
-    CMP AL, 2
-    JE ASK_RESET
+    ; For 1st and 2nd attempts ? show hint + ask reset
+    ; Show password hint
+    MOV AH, 9
+    LEA DX, msg_show_hint
+    INT 21h
+    LEA DX, password_hint
+    INT 21h
+
+    ; Ask if user wants to reset
+    JMP ASK_RESET
+
+
+
+CONTINUE_FAIL:
+
     
     ; 1st failed attempt only shows retry message
     MOV AH, 9
@@ -514,11 +509,10 @@ TRIGGER_ALARM:
     MOV AH,9
     LEA DX,msg_alarm
     INT 21h
-    
+
     ; Log alarm trigger
     LEA SI, msg_alarm+2
     MOV DI, history_ptr
-    
     ; Add newline
     MOV AL, 13
     MOV [DI], AL
@@ -526,7 +520,7 @@ TRIGGER_ALARM:
     MOV AL, 10
     MOV [DI], AL
     INC DI
-    
+
     ; Copy message to history
     MOV AL, [SI]
 LOG_ALARM:
@@ -537,8 +531,22 @@ LOG_ALARM:
     INC DI
     MOV AL, [SI]
     JMP LOG_ALARM
+
 ALARM_LOGGED:
     MOV history_ptr, DI
+    JMP SOUND_LOOP
+
+
+
+    
+; Show password hint before reset prompt
+MOV AH, 9
+LEA DX, msg_show_hint
+INT 21h
+LEA DX, password_hint
+INT 21h
+
+
 
 ASK_RESET:
     ; "Forgot your PIN? (Y/N)"
@@ -553,15 +561,28 @@ ASK_RESET:
     CMP AL,'y'
     JE  CHECK_SECURITY_QUESTION
     CMP AL,'N'
-    JE  SOUND_LOOP
+    JE  COUNT_FAIL_AND_RETRY
     CMP AL,'n'
-    JE  SOUND_LOOP
+    JE  COUNT_FAIL_AND_RETRY
+
 
     ; invalid input -> re-prompt
     MOV AH,9
     LEA DX,msg_invalid_input
     INT 21h
     JMP ASK_RESET
+     
+COUNT_FAIL_AND_RETRY:
+    ; Continue failed attempt counter logic
+    CMP attempts, 3
+    JE TRIGGER_ALARM
+
+    MOV AH, 9
+    LEA DX, msg_fail
+    INT 21h
+    JMP START
+
+
 
 CHECK_SECURITY_QUESTION:
     ; Check if security question is set
@@ -779,7 +800,6 @@ HINT_DONE2:
     
     ; Copy message to history
     MOV AL, [SI]
-    JE Exit
 LOG_HINT2:
     CMP AL, '$'
     JE HINT_LOGGED2
@@ -827,6 +847,33 @@ CLEAR_USER_INPUT:
     JB CLEAR_USER_INPUT
 
     JMP START 
+    
+APPEND_HISTORY:
+    MOV DI, history_ptr
+
+    ; Add newline
+    MOV AL, 13
+    MOV [DI], AL
+    INC DI
+    MOV AL, 10
+    MOV [DI], AL
+    INC DI
+
+.APPEND_LOOP:
+    MOV AL, [SI]
+    CMP AL, '$'
+    JE .DONE
+    CMP AL, 0
+    JE .DONE
+    MOV [DI], AL
+    INC SI
+    INC DI
+    JMP .APPEND_LOOP
+.DONE:
+    MOV history_ptr, DI
+    RET
+
+
 
 MAIN ENDP
 END MAIN
